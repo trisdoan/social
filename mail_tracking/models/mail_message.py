@@ -28,8 +28,7 @@ class MailMessage(models.Model):
         default=False,
     )
     is_failed_message = fields.Boolean(
-        compute="_compute_is_failed_message",
-        search="_search_is_failed_message",
+        compute="_compute_is_failed_message", search="_search_is_failed_message",
     )
 
     @api.model
@@ -41,7 +40,6 @@ class MailMessage(models.Model):
         "mail_tracking_needs_action",
         "author_id",
         "notification_ids",
-        "mail_tracking_ids",
         "mail_tracking_ids.state",
     )
     def _compute_is_failed_message(self):
@@ -50,7 +48,7 @@ class MailMessage(models.Model):
         for message in self:
             needs_action = message.mail_tracking_needs_action
             involves_me = self.env.user.partner_id in (
-                message.author_id | message.notification_ids.res_partner_id
+                message.author_id | message.notification_ids.mapped("res_partner_id")
             )
             has_failed_trackings = failed_states.intersection(
                 message.mapped("mail_tracking_ids.state")
@@ -262,12 +260,19 @@ class MailMessage(models.Model):
     def set_need_action_done(self):
         """This will mark the messages to be ignored in the tracking issues filter"""
         self.check_access_rule("read")
-        self.mail_tracking_needs_action = False
-        self._notify_message_notification_update()
+        self.write({"mail_tracking_needs_action": False})
+        notification = {
+            "type": "toggle_tracking_status",
+            "message_ids": self.ids,
+            "needs_actions": False,
+        }
+        self.env["bus.bus"].sendone(
+            (self._cr.dbname, "res.partner", self.env.user.partner_id.id), notification
+        )
 
     @api.model
     def get_failed_count(self):
-        """Gets the number of failed messages used on discuss mailbox item"""
+        """ Gets the number of failed messages used on discuss mailbox item"""
         return self.search_count([("is_failed_message", "=", True)])
 
     @api.model
@@ -280,20 +285,9 @@ class MailMessage(models.Model):
         ]
         return res
 
-    def _message_notification_format(self):
-        """Add info for the web client"""
-        formatted_notifications = super()._message_notification_format()
-        for notification in formatted_notifications:
-            message = self.filtered(
-                lambda x, notification=notification: x.id == notification["id"]
-            )
-            notification.update(
-                {
-                    "mail_tracking_needs_action": message.mail_tracking_needs_action,
-                    "is_failed_message": message.is_failed_message,
-                }
-            )
-        return formatted_notifications
+        unreviewed_messages = self.search([("is_failed_message", "=", True)])
+        unreviewed_messages.write({"mail_tracking_needs_action": False})
+        ids = unreviewed_messages.ids
 
     def _message_format_extras(self, format_reply):
         """Add info for the web client"""
