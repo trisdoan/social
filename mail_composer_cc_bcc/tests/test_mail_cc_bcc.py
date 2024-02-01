@@ -5,20 +5,21 @@ import hashlib
 import inspect
 
 from odoo import tools
-from odoo.tests import Form
-
-from odoo.addons.mail.models.mail_mail import MailMail as upstream
-from odoo.addons.mail.tests.test_mail_composer import TestMailComposer
+from odoo.tests import Form, tagged, users
+from odoo.tools import mute_logger
 
 VALID_HASHES = [
-    "d52cb36b88b33abc9556f7be6718d93f",
+    "0be47c701f7df8ef3320c950cb57bb1c",
 ]
+from odoo.addons.mail.models.mail_mail import MailMail as upstream
+from odoo.addons.mail.tests.test_mail_composer import TestMailComposerForm
 
 
-class TestMailCcBcc(TestMailComposer):
+@tagged("mail_composer")
+class TestMailCcBcc(TestMailComposerForm):
     @classmethod
     def setUpClass(cls):
-        super().setUpClass()
+        super(TestMailCcBcc, cls).setUpClass()
         env = cls.env
         cls.partner = env.ref("base.res_partner_address_31")
         cls.partner_cc = env.ref("base.partner_demo")
@@ -32,29 +33,11 @@ class TestMailCcBcc(TestMailComposer):
         ctx = {
             "default_partner_ids": test_record.ids,
             "default_model": test_record._name,
-            "default_res_id": test_record.id,
+            "default_res_ids": test_record.ids,
             # to ensure consistent test results even when mail_post_defer is installed
             "mail_notify_force_send": True,
         }
         form = Form(self.env["mail.compose.message"].with_context(**ctx))
-        form.body = "<p>Hello</p>"
-        return form
-
-    def open_invoice_mail_composer_form(self):
-        # Use form to populate data
-        for_name = [("name", "like", "%INV/20__/00003")]
-        self.test_invoice = test_record = self.env["account.move"].search(for_name)
-        self.assertTrue(
-            self.test_invoice,
-            "Test setup did not succeeed. Invoice not found.",
-        )
-        ctx = {
-            "active_ids": test_record.ids,
-            "default_model": "account.move",
-            "default_res_id": test_record.id,
-            "mail_notify_force_send": True,
-        }
-        form = Form(self.env["account.invoice.send"].with_context(**ctx))
         form.body = "<p>Hello</p>"
         return form
 
@@ -64,6 +47,8 @@ class TestMailCcBcc(TestMailComposer):
         func_hash = hashlib.md5(func).hexdigest()
         self.assertIn(func_hash, VALID_HASHES)
 
+    @mute_logger("odoo.addons.mail.models.mail_mail")
+    @users("employee")
     def test_email_cc_bcc(self):
         form = self.open_mail_composer_form()
         composer = form.save()
@@ -87,6 +72,7 @@ class TestMailCcBcc(TestMailComposer):
         ]
         notif = self.env["mail.notification"].search(for_message)
         self.assertEqual(len(notif), 5)
+
         # Verify data of mail.mail
         mail = message.mail_ids
         expecting = ", ".join(
@@ -123,35 +109,44 @@ Test Template<br></p>""",
             ),
         }
         prod_tmpl = env["mail.template"].create(vals)
+
         # Open mail composer form and check for default values from company
         form = self.open_mail_composer_form()
         composer = form.save()
+
         self.assertEqual(composer.partner_cc_ids, self.partner_cc3)
         self.assertEqual(composer.partner_bcc_ids, self.partner_cc2)
+
         # Change email template and check for values from it
         form.template_id = prod_tmpl
         composer = form.save()
+
         # Beside existing Cc and Bcc, add template's ones
         form = Form(composer)
         form.template_id = prod_tmpl
         composer = form.save()
         expecting = self.partner_cc3 + self.partner_cc
+
         self.assertEqual(composer.partner_cc_ids, expecting)
         expecting = self.partner_cc2 + self.partner_bcc
         self.assertEqual(composer.partner_bcc_ids, expecting)
         # But not add Marc Demo from cc field to partner_ids field
         self.assertEqual(len(composer.partner_ids), 1)
         self.assertEqual(composer.partner_ids.display_name, "Test")
+
         # Selecting the template again doesn't add as the partners already
         # in the list
         form = Form(composer)
         form.template_id = env["mail.template"]
         form.save()
-        self.assertFalse(form.template_id)
+        self.assertFalse(form.template_id)  # no template
+
         form.template_id = prod_tmpl
         composer = form.save()
+
         expecting = self.partner_cc3 + self.partner_cc
         self.assertEqual(composer.partner_cc_ids, expecting)
+
         expecting = self.partner_cc2 + self.partner_bcc
         self.assertEqual(composer.partner_bcc_ids, expecting)
 
@@ -169,21 +164,10 @@ Test Template<br></p>""",
 
         with self.mock_mail_gateway():
             composer._action_send_mail()
+
         message = self.test_record.message_ids[0]
         self.assertEqual(len(message.mail_ids), 1)
-        # Only 4 partners notified
-        self.assertEqual(len(message.notified_partner_ids), 4)
-        self.assertEqual(len(message.notification_ids), 4)
 
-    def test_invoice_mail_cc_bcc(self):
-        self.set_company()
-        form = self.open_invoice_mail_composer_form()
-        form.subject = "Hello"
-        composer = form.save()
-        with self.mock_mail_gateway():
-            composer._send_email()
-        message = self.test_invoice.message_ids[0]
-        self.assertEqual(len(message.mail_ids), 1)
         # Only 4 partners notified
         self.assertEqual(len(message.notified_partner_ids), 4)
         self.assertEqual(len(message.notification_ids), 4)
