@@ -12,6 +12,8 @@ class MailThread(models.AbstractModel):
     def _message_create(self, values_list):
         context = self.env.context
         res = super()._message_create(values_list)
+        if res.message_type == "notification":
+            return res
         partners_cc = context.get("partner_cc_ids", None)
         if partners_cc:
             res.recipient_cc_ids = partners_cc
@@ -48,7 +50,7 @@ class MailThread(models.AbstractModel):
         rdata = super()._notify_get_recipients(message, msg_vals, **kwargs)
         context = self.env.context
         is_from_composer = context.get("is_from_composer", False)
-        if not is_from_composer:
+        if not is_from_composer or msg_vals.get("message_type") == "notification":
             return rdata
         for pdata in rdata:
             pdata["type"] = "customer"
