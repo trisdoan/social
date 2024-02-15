@@ -4,23 +4,21 @@
 
 from odoo import fields, models, tools
 
+from odoo.addons.base.models.ir_mail_server import extract_rfc2822_addresses
+
+
+def format_emails(partners):
+    emails = [tools.formataddr((p.name or "", p.email)) for p in partners if p.email]
+    return ", ".join(emails)
+
 
 class MailMail(models.Model):
     _inherit = "mail.mail"
 
     email_bcc = fields.Char("Bcc", help="Blind Cc message recipients")
 
-    # ------------------------------------------------------
-    # mail_mail formatting, tools and send mechanism
-    # ------------------------------------------------------
-
     def _prepare_outgoing_list(self, recipients_follower_status=None):
-        """
-        This method is override to do 2 tasks
-            - Add Bcc recipients to the list of recipients.
-            - If the email is being sent from the composer, then only send one email.
-
-        """
+        # First, return if we're not coming from the Mail Composer
         res = super()._prepare_outgoing_list(
             recipients_follower_status=recipients_follower_status
         )
@@ -30,40 +28,38 @@ class MailMail(models.Model):
         if is_out_of_scope or not is_from_composer:
             return res
 
-        one_email = res[0]
-        if self.mail_message_id.partner_ids:
-            partner = self.mail_message_id.partner_ids[0]
-            email_to = tools.email_normalize(partner.email)
-            if email_to:
-                email_to_formatted = tools.formataddr((partner.name or "", email_to))
-            else:
-                email_to_formatted = tools.formataddr(
-                    (partner.name or "", partner.email or "False")
-                )
-            one_email.update(
+        # Prepare values for To, Cc, Bcc headers
+        partners_cc_bcc = self.recipient_cc_ids + self.recipient_bcc_ids
+        partner_to_ids = [r.id for r in self.recipient_ids if r not in partners_cc_bcc]
+        partner_to = self.env["res.partner"].browse(partner_to_ids)
+        email_to = format_emails(partner_to)
+        email_cc = format_emails(self.recipient_cc_ids)
+        email_bcc = format_emails(self.recipient_bcc_ids)
+
+        # Collect recipients (RCPT TO) and update all emails
+        # with the same To, Cc, Bcc headers
+        # (to be shown by email client as users expect)
+        recipients = []
+        for m in res:
+            rcpt_to = None
+            if m["email_to"]:
+                rcpt_to = extract_rfc2822_addresses(m["email_to"][0])[0]
+            # in the absence of self.email_to, Odoo creates one special mail for CC
+            # see https://github.com/odoo/odoo/commit/46bad8f0
+            elif m["email_cc"]:
+                rcpt_to = extract_rfc2822_addresses(m["email_cc"][0])[0]
+            if rcpt_to:
+                recipients.append(rcpt_to)
+
+            m.update(
                 {
-                    "email_to": [email_to_formatted],
-                    "email_to_raw": partner.email or "",
-                    "partner_id": partner,
-                }
-            )
-        elif self.email_to:
-            one_email.update(
-                {
-                    "email_to": tools.email_split_and_format(self.email_to),
-                    "email_to_raw": self.email_to or "",
-                    "partner_id": False,
+                    "email_to": email_to,
+                    "email_to_raw": email_to,
+                    "email_cc": email_cc,
+                    # mail server removes it when not relevant
+                    "email_bcc": email_bcc
                 }
             )
 
-        if self.email_cc:
-            one_email.update({"email_cc": tools.email_split(self.email_cc)})
-        else:
-            one_email.update({"email_cc": []})
-
-        if self.email_bcc:
-            one_email.update({"email_bcc": tools.email_split(self.email_bcc)})
-        else:
-            one_email.update({"email_bcc": []})
-        res = [one_email]
+        self.env.context = {**self.env.context, "recipients": recipients}
         return res
