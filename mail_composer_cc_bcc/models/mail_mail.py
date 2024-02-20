@@ -12,6 +12,11 @@ def format_emails(partners):
     return ", ".join(emails)
 
 
+def format_emails_raw(partners):
+    emails = [p.email for p in partners if p.email]
+    return ", ".join(emails)
+
+
 class MailMail(models.Model):
     _inherit = "mail.mail"
 
@@ -28,36 +33,44 @@ class MailMail(models.Model):
         if is_out_of_scope or not is_from_composer:
             return res
 
-        # Prepare values for To, Cc, Bcc headers
+        # Prepare values for To, Cc headers
         partners_cc_bcc = self.recipient_cc_ids + self.recipient_bcc_ids
         partner_to_ids = [r.id for r in self.recipient_ids if r not in partners_cc_bcc]
         partner_to = self.env["res.partner"].browse(partner_to_ids)
         email_to = format_emails(partner_to)
+        email_to_raw = format_emails_raw(partner_to)
         email_cc = format_emails(self.recipient_cc_ids)
-        email_bcc = format_emails(self.recipient_bcc_ids)
+        email_bcc = [r.email for r in self.recipient_bcc_ids if r.email]
 
         # Collect recipients (RCPT TO) and update all emails
-        # with the same To, Cc, Bcc headers
-        # (to be shown by email client as users expect)
+        # with the same To, Cc headers (to be shown by email client as users expect)
         recipients = []
         for m in res:
             rcpt_to = None
             if m["email_to"]:
                 rcpt_to = extract_rfc2822_addresses(m["email_to"][0])[0]
+
+                # If the recipient is a Bcc, we had an explicit header X-Odoo-Bcc
+                # - It won't be shown by the email client, but can be useful for a recipient
+                #   to understand why he received a given email
+                # - Also note that in python3, the smtp.send_message method does not
+                #   transmit the Bcc field of a Message object
+                if rcpt_to in email_bcc:
+                    m["headers"].update({"X-Odoo-Bcc": m["email_to"][0]})
+
             # in the absence of self.email_to, Odoo creates one special mail for CC
             # see https://github.com/odoo/odoo/commit/46bad8f0
             elif m["email_cc"]:
                 rcpt_to = extract_rfc2822_addresses(m["email_cc"][0])[0]
+
             if rcpt_to:
                 recipients.append(rcpt_to)
 
             m.update(
                 {
                     "email_to": email_to,
-                    "email_to_raw": email_to,
+                    "email_to_raw": email_to_raw,
                     "email_cc": email_cc,
-                    # mail server removes it when not relevant
-                    "email_bcc": email_bcc,
                 }
             )
 
