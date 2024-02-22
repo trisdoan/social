@@ -101,6 +101,7 @@ class MailComposeMessage(models.TransientModel):
                 res_ids = composer._evaluate_res_ids() or [0]
                 rendered_values = composer._generate_template_for_composer(
                     res_ids,
+                    # DIFFERENT FROM ODOO NATIVE:
                     {"email_to", "partner_ids"},
                     find_or_create_partners=True,
                 )[res_ids[0]]
@@ -169,6 +170,7 @@ class MailComposeMessage(models.TransientModel):
                     res_ids, auto_commit=auto_commit
                 )
             else:
+                # DIFFERENT FROM ODOO NATIVE:
                 context = {
                     "is_from_composer": True,
                     "partner_cc_ids": wizard.partner_cc_ids,

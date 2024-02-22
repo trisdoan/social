@@ -18,8 +18,7 @@ class MailTemplate(models.Model):
     # MESSAGE/EMAIL VALUES GENERATION
     # ------------------------------------------------------------
 
-    # TODO: reduce repeated code
-    def _generate_template_recipients(
+    def _generate_template_recipients(  # noqa:C901
         self, res_ids, render_fields, find_or_create_partners=False, render_results=None
     ):
         self.ensure_one()
@@ -66,6 +65,7 @@ class MailTemplate(models.Model):
             email_to_company = {}
             for res_id in res_ids:
                 record_values = render_results.setdefault(res_id, {})
+                # DIFFERENT FROM ODOO NATIVE:
                 if record_values.get("email_cc"):
                     continue
                 mails = tools.email_split(record_values.pop("email_to", ""))
@@ -90,7 +90,7 @@ class MailTemplate(models.Model):
                         for email in itertools.chain(all_emails, [False])
                     },
                 )
-                for original_email, partner in zip(all_emails, partners):
+                for original_email, partner in zip(all_emails, partners):  # noqa: B905
                     if not partner:
                         continue
                     for res_id in email_to_res_ids[original_email]:
@@ -109,7 +109,7 @@ class MailTemplate(models.Model):
             existing_pids = set(
                 self.env["res.partner"].sudo().browse(list(all_partner_to)).exists().ids
             )
-        for res_id, record_values in render_results.items():
+        for res_id, record_values in render_results.items():  # noqa: B007
             partner_to = record_values.pop("partner_to", "")
             if partner_to:
                 tpl_partner_ids = (
@@ -117,6 +117,7 @@ class MailTemplate(models.Model):
                 )
                 record_values.setdefault("partner_ids", []).extend(tpl_partner_ids)
 
+        # DIFFERENT FROM ODOO NATIVE:
         # update 'email_cc' rendered value to 'partner_bcc_ids'
         all_cc_emails = []
         if record_values.get("email_cc", ""):
@@ -127,7 +128,7 @@ class MailTemplate(models.Model):
                 email_to_res_ids.setdefault(mail, []).append(res_id)
                 if record_company:
                     email_to_company[mail] = record_company
-
+        # DIFFERENT FROM ODOO NATIVE:
         if all_cc_emails:
             customers_information = ModelSudo.browse(
                 res_ids
@@ -142,14 +143,14 @@ class MailTemplate(models.Model):
                     for email in itertools.chain(all_cc_emails, [False])
                 },
             )
-            for original_email, partner in zip(all_cc_emails, partners):
+            for original_email, partner in zip(all_cc_emails, partners):  # noqa: B905
                 if not partner:
                     continue
                 for res_id in email_to_res_ids[original_email]:
                     render_results[res_id].setdefault("partner_cc_ids", []).append(
                         partner.id
                     )
-
+        # DIFFERENT FROM ODOO NATIVE:
         # update 'email_bcc' rendered value to 'partner_bcc_ids'
         all_bcc_emails = []
         if record_values.get("email_bcc", ""):
@@ -160,7 +161,7 @@ class MailTemplate(models.Model):
                 email_to_res_ids.setdefault(mail, []).append(res_id)
                 if record_company:
                     email_to_company[mail] = record_company
-
+        # DIFFERENT FROM ODOO NATIVE:
         if all_bcc_emails:
             customers_information = ModelSudo.browse(
                 res_ids
@@ -175,7 +176,7 @@ class MailTemplate(models.Model):
                     for email in itertools.chain(all_bcc_emails, [False])
                 },
             )
-            for original_email, partner in zip(all_bcc_emails, partners):
+            for original_email, partner in zip(all_bcc_emails, partners):  # noqa: B905
                 if not partner:
                     continue
                 for res_id in email_to_res_ids[original_email]:
@@ -189,9 +190,7 @@ class MailTemplate(models.Model):
             res_ids, render_fields, find_or_create_partners=find_or_create_partners
         )
 
-        for _lang, (template, template_res_ids) in self._classify_per_lang(
-            res_ids
-        ).items():
+        for _, (template, template_res_ids) in self._classify_per_lang(res_ids).items():
             if "email_bcc" in render_fields:
                 template._generate_template_recipients(
                     template_res_ids,

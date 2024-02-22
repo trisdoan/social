@@ -1,14 +1,24 @@
 # Copyright 2023 Camptocamp
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+import hashlib
+import inspect
 
 from odoo import tools
-from odoo.tests import Form, tagged, users
-from odoo.tools import mute_logger
+from odoo.tests import Form
 
+from odoo.addons.mail.models.mail_template import MailTemplate as MailTemplate_upstream
 from odoo.addons.mail.tests.test_mail_composer import TestMailComposerForm
+from odoo.addons.mail.wizard.mail_compose_message import (
+    MailComposer as MailComposer_upstream,
+)
+
+VALID_HASHES = {
+    "mail.template:_generate_template_recipients": ["73b0e20a018984841e454a57a86ee08d"],
+    "mail.composer:_compute_partner_ids": ["813ef112e3948fe625b9a89428f2518d"],
+    "mail.composer:_action_send_mail": ["c040555651294a232573a3f7b60b5ed2"],
+}
 
 
-@tagged("mail_composer")
 class TestMailCcBcc(TestMailComposerForm):
     @classmethod
     def setUpClass(cls):
@@ -34,8 +44,30 @@ class TestMailCcBcc(TestMailComposerForm):
         form.body = "<p>Hello</p>"
         return form
 
-    @mute_logger("odoo.addons.mail.models.mail_mail")
-    @users("employee")
+    def test_MailTemplate_upstream_file_hash(self):
+        """Test that copied upstream function hasn't received fixes"""
+        func = inspect.getsource(
+            MailTemplate_upstream._generate_template_recipients
+        ).encode()
+        func_hash = hashlib.md5(func).hexdigest()
+        self.assertIn(
+            func_hash, VALID_HASHES.get("mail.template:_generate_template_recipients")
+        )
+
+    def test_MailComposer_upstream_file_hash(self):
+        """Test that copied upstream function hasn't received fixes"""
+        _compute_partner_ids = inspect.getsource(
+            MailComposer_upstream._compute_partner_ids
+        ).encode()
+        func_hash = hashlib.md5(_compute_partner_ids).hexdigest()
+        self.assertIn(func_hash, VALID_HASHES.get("mail.composer:_compute_partner_ids"))
+
+        _action_send_mail = inspect.getsource(
+            MailComposer_upstream._action_send_mail
+        ).encode()
+        func_hash = hashlib.md5(_action_send_mail).hexdigest()
+        self.assertIn(func_hash, VALID_HASHES.get("mail.composer:_action_send_mail"))
+
     def test_email_cc_bcc(self):
         form = self.open_mail_composer_form()
         composer = form.save()
