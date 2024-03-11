@@ -240,9 +240,9 @@ class MailMessage(models.Model):
 
         return list(filter(_filter_alias, mail_list))
 
-    def message_format(self, format_reply=True):
+    def message_format(self, format_reply=True, msg_vals=None):
         """Preare values to be used by the chatter widget"""
-        res = super().message_format(format_reply)
+        res = super().message_format(format_reply, msg_vals)
         mail_message_ids = {m.get("id") for m in res if m.get("id")}
         mail_messages = self.browse(mail_message_ids)
         tracking_statuses = mail_messages.tracking_status()
@@ -261,7 +261,7 @@ class MailMessage(models.Model):
         if not failed_trackings or not self.mail_tracking_needs_action:
             return
         failed_partners = failed_trackings.mapped("partner_id")
-        failed_recipients = failed_partners.name_get()
+        failed_recipients = failed_partners.display_name
         return {
             "id": self.id,
             "date": self.date,
