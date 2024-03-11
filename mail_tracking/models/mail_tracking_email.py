@@ -175,20 +175,12 @@ class MailTrackingEmail(models.Model):
         ]
 
     @api.model
-    def _search(
-        self,
-        args,
-        offset=0,
-        limit=None,
-        order=None,
-        count=False,
-        access_rights_uid=None,
-    ):
+    def _search(self, domain, offset=0, limit=None, order=None, access_rights_uid=None):
         """Filter ids based on related records ACLs"""
         ids = super()._search(
-            args, offset, limit, order, count=count, access_rights_uid=access_rights_uid
+            domain, offset, limit, order, access_rights_uid=access_rights_uid
         )
-        if not self.env.user.has_group("base.group_system") and not count:
+        if not self.env.user.has_group("base.group_system"):
             ids = self.browse(ids)._find_allowed_tracking_ids()
         return ids
 
@@ -370,19 +362,21 @@ class MailTrackingEmail(models.Model):
             self.sudo()._partners_email_bounced_set("error")
         self.sudo().write(values)
 
-    def tracking_img_add(self, email):
-        self.ensure_one()
-        tracking_url = self._get_mail_tracking_img()
-        if tracking_url:
-            content = email.get("body", "")
-            content = re.sub(
-                r'<img[^>]*data-odoo-tracking-email=["\'][0-9]*["\'][^>]*>', "", content
-            )
-            body = tools.append_content_to_html(
-                content, tracking_url, plaintext=False, container_tag="div"
-            )
-            email["body"] = body
-        return email
+    def tracking_img_add(self, email_list):
+        for email in email_list:
+            tracking_url = self._get_mail_tracking_img()
+            if tracking_url:
+                content = email.get("body", "")
+                content = re.sub(
+                    r'<img[^>]*data-odoo-tracking-email=["\'][0-9]*["\'][^>]*>',
+                    "",
+                    content,
+                )
+                body = tools.append_content_to_html(
+                    content, tracking_url, plaintext=False, container_tag="div"
+                )
+                email["body"] = body
+        return email_list
 
     def _message_partners_check(self, message, message_id):
         if not self.mail_message_id.exists():  # pragma: no cover
@@ -462,12 +456,3 @@ class MailTrackingEmail(models.Model):
             else:
                 _logger.debug("Concurrent event '%s' discarded", event_type)
         return event_ids
-
-    # TODO Remove useless method
-    @api.model
-    def event_process(self, request, post, metadata, event_type=None):
-        # Generic event process hook, inherit it and
-        # - return 'OK' if processed
-        # - return 'NONE' if this request is not for you
-        # - return 'ERROR' if any error
-        return "NONE"  # pragma: no cover

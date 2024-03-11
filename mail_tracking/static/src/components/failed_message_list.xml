@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
 
-    <t t-name="mail_tracking.FailedMessageList" owl="1">
-        <t
+    <t t-name="mail_tracking.FailedMessageList">
+        <t 
             t-set="nonReviewedFailedMessageItems"
-            t-value="messageListView._getNonReviewedFailedMessageItems(
-                messageListView.messageFailedListViewItems, store.reviewedMessageIds
+            t-value="_getNonReviewedFailedMessageItems(
+                props.thread.message, store.reviewedMessageIds
             )"
         />
         <div
-            t-if="messageListView &amp;&amp; nonReviewedFailedMessageItems.length"
-            class="o_ActivityBox o_Chatter_activityBox"
         >
-            <a
+            <!-- <a
                 href="#"
                 class="o_ActivityBox_title btn d-flex align-items-center p-0 w-100 fw-bold"
                 role="button"
@@ -37,8 +35,8 @@
                     />
                 </span>
                 <hr class="o_ActivityBox_titleLine w-auto flex-grow-1 ms-3" />
-            </a>
-            <div
+            </a> -->
+            <!-- <div
                 class="o_MessageList bg-view d-flex flex-column overflow-auto"
                 t-att-class="{
                     'o-empty align-items-center justify-content-center': messageListView.threadViewOwner.messages.length === 0,
@@ -63,7 +61,7 @@
                         isFailedMessage="true"
                     />
                 </t>
-            </div>
+            </div> -->
         </div>
     </t>
 
