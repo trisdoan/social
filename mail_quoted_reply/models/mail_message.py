@@ -25,7 +25,7 @@ class MailMessage(models.Model):
             {body}
             </blockquote>
             </div>
-        """.format(
+        """.format(  # noqa: E501
             email_from=self.email_from,
             date=format_datetime(self.env, self.date),
             subject=self.subject,
@@ -45,7 +45,7 @@ class MailMessage(models.Model):
         )
         action["context"] = {
             "default_model": self.model,
-            "default_res_id": self.res_id,
+            "default_res_ids": [self.res_id],
             "default_composition_mode": "comment",
             "quote_body": self._prep_quoted_reply_body(),
             "default_is_log": False,
