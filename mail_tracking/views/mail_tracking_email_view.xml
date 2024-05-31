@@ -34,14 +34,14 @@
                             <field name="date" />
                         </group>
                     </group>
-                    <group attrs="{'invisible': [('bounce_type', '=', False)]}">
+                    <group invisible="not bounce_type">
                         <field name="bounce_type" />
                         <field name="bounce_description" />
                     </group>
-                    <group attrs="{'invisible': [('error_type', '=', False)]}">
+                    <group invisible="not error_type">
                         <field
                             name="error_smtp_server"
-                            attrs="{'invisible': [('error_smtp_server', '=', False)]}"
+                            invisible="not error_smtp_server"
                         />
                         <field name="error_type" />
                         <field name="error_description" />
@@ -84,7 +84,7 @@
                 decoration-info="state == 'unsub'"
             >
                 <field name="time" />
-                <field name="date" invisible="1" />
+                <field name="date" column_invisible="1" />
                 <field name="name" />
                 <field name="sender" string="Sender" />
                 <field name="recipient" string="Recipient" />

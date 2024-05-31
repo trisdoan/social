@@ -1,0 +1,15 @@
+<templates xml:space="preserve">
+ <t t-inherit="mail.Thread" t-inherit-mode="extension">
+        <xpath
+            expr='//t[@t-if="props.thread.id === &apos;history&apos;"]'
+            position="after"
+        >
+            <t t-if="props.thread.id === 'failed'">
+                         <h4 class="mb-3 fw-bolder">
+                            Congratulations, no failed messages
+                        </h4>
+                        New failed messages appear here.
+                    </t>
+        </xpath>
+    </t>
+</templates>

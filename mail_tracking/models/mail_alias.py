@@ -25,16 +25,16 @@ class MailAlias(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         res = super().create(vals_list)
-        self.clear_caches()
+        self.env.registry.clear_cache()
         return res
 
     def write(self, vals):
         res = super().write(vals)
         if "alias_name" in vals:
-            self.clear_caches()
+            self.env.registry.clear_cache()
         return res
 
     def unlink(self):
         res = super().unlink()
-        self.clear_caches()
+        self.env.registry.clear_cache()
         return res

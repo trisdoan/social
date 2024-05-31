@@ -1,0 +1,9 @@
+<templates xml:space="preserve">
+ <t t-inherit="mail.DiscussSidebarMailboxes" t-inherit-mode="extension">
+        <xpath expr="//div/t[@t-call='mail.Mailbox'][last()]" position="after">
+            <t t-call="mail.Mailbox">
+                <t t-set="mailbox" t-value="store.discuss.failed" />
+            </t>
+        </xpath>
+    </t>
+</templates>

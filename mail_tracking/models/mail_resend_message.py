@@ -1,7 +1,7 @@
 # Copyright 2019 Alexandre Díaz
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
-from odoo import api, models
+from odoo import Command, api, models
 
 
 class MailResendMessage(models.TransientModel):
@@ -19,21 +19,28 @@ class MailResendMessage(models.TransientModel):
                 lambda x: x.state in failed_states
             )
             if any(tracking_ids):
-                partner_ids = [
-                    (
-                        0,
-                        0,
+                partner_values = []
+                for tracking in tracking_ids:
+                    notification_id = (
+                        tracking.mail_message_id.notification_ids.filtered(
+                            lambda x: x.res_partner_id == tracking.partner_id  # noqa: B023
+                        )
+                    )
+                    partner_values.append(
                         {
-                            "partner_id": tracking.partner_id.id,
-                            "name": tracking.partner_id.name,
-                            "email": tracking.partner_id.email,
+                            "notification_id": notification_id.id,
                             "resend": True,
                             "message": tracking.error_description,
-                        },
+                        }
                     )
-                    for tracking in tracking_ids
-                ]
-                rec["partner_ids"].extend(partner_ids)
+                if partner_values:
+                    partner_ids = (
+                        self.env["mail.resend.partner"].create(partner_values).ids
+                    )
+                    partner_commands = [
+                        Command.link(partner_id) for partner_id in partner_ids
+                    ]
+                    rec["partner_ids"].extend(partner_commands)
         return rec
 
     def resend_mail_action(self):
@@ -44,7 +51,7 @@ class MailResendMessage(models.TransientModel):
                 wizard.mail_message_id.mail_tracking_needs_action = False
                 # Reset mail.tracking.email state
                 tracking_ids = wizard.mail_message_id.mail_tracking_ids.filtered(
-                    lambda x: x.partner_id in to_send
+                    lambda x: x.partner_id in to_send  # noqa B023
                 )
                 tracking_ids.sudo().write({"state": False})
                 # Send bus notifications to update Discuss and

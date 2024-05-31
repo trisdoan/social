@@ -1,6 +1,7 @@
 /** @odoo-module **/
 
 const {reactive, useState} = owl;
+// TODO: this can be add to message_service?
 
 // Set reactive object to observe the current state of failed messages.
 // This allows re-rendering only non-reviewed failed messages without

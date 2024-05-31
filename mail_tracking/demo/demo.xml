@@ -112,7 +112,7 @@
         />
             <field
             name="notification_ids"
-            eval="[Command.create({'res_partner_id': ref('base.partner_demo')})]"
+            eval="[Command.create({'res_partner_id': ref('base.partner_demo'), 'notification_type': 'email'})]"
         />
             <field name="subject">Failed Message</field>
         </record>
@@ -120,7 +120,7 @@
         <record id="mail_tracking_email_failed_c" model="mail.tracking.email">
             <field name="name">Failed Message</field>
             <field name="mail_message_id" ref="mail_message_failed_c" />
-            <field name="partner_id" ref="base.partner_admin" />
+            <field name="partner_id" ref="base.partner_demo" />
             <field name="recipient">demo@yourcompany.example.com</field>
             <field name="sender">admin@example.com</field>
             <field name="state">error</field>

@@ -129,6 +129,9 @@ Known issues / Roadmap
    to write a notification event along with the mail.tracking.event
    ones. Another way could be to merge both models and build the module
    features on top of it. This might imply a refactor though.
+-  Show failed messages in the chatter as below: |failed_message_list|
+
+.. |failed_message_list| image:: https://raw.githubusercontent.com/OCA/social/17.0/mail_tracking/static/img/showing_failed_message_list.png
 
 Bug Tracker
 ===========
@@ -167,6 +170,10 @@ Contributors
 -  `Vauxoo <https://www.vauxoo.com>`__:
 
    -  Agustín Payen Sandoval
+
+-  `Trobz <https://www.trobz.com>`__:
+
+   -  Tris Doan
 
 Other credits
 -------------

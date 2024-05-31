@@ -1,19 +1,15 @@
 # Copyright 2016 Antonio Espinosa - <antonio.espinosa@tecnativa.com>
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 
-import base64
 import time
 from unittest.mock import patch
 
-from werkzeug.exceptions import BadRequest
-
-from odoo import http
+import odoo
 from odoo.fields import Command
 from odoo.tests.common import TransactionCase
 from odoo.tools import mute_logger
 
-from ..controllers.discuss import MailTrackingDiscussController
-from ..controllers.main import BLANK, MailTrackingController
+from odoo.addons.base.tests.common import HttpCaseWithUserDemo
 
 mock_send_email = "odoo.addons.base.models.ir_mail_server." "IrMailServer.send_email"
 
@@ -28,38 +24,15 @@ class FakeUserAgent:
 
 
 class TestMailTracking(TransactionCase):
-    def setUp(self, *args, **kwargs):
-        super(TestMailTracking, self).setUp(*args, **kwargs)
-        self.sender = self.env["res.partner"].create(
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.sender = cls.env["res.partner"].create(
             {"name": "Test sender", "email": "sender@example.com"}
         )
-        self.recipient = self.env["res.partner"].create(
+        cls.recipient = cls.env["res.partner"].create(
             {"name": "Test recipient", "email": "recipient@example.com"}
         )
-        self.last_request = http.request
-        http.request = type(
-            "obj",
-            (object,),
-            {
-                "env": self.env,
-                "cr": self.env.cr,
-                "db": self.env.cr.dbname,
-                "endpoint": type("obj", (object,), {"routing": []}),
-                "httprequest": type(
-                    "obj",
-                    (object,),
-                    {"remote_addr": "123.123.123.123", "user_agent": FakeUserAgent()},
-                ),
-            },
-        )
-        for _ in http._generate_routing_rules(
-            ["mail", "mail_tracking"], nodb_only=False
-        ):
-            pass
-
-    def tearDown(self, *args, **kwargs):
-        http.request = self.last_request
-        return super(TestMailTracking, self).tearDown(*args, **kwargs)
 
     def test_empty_email(self):
         self.recipient.write({"email_bounced": True})
@@ -162,7 +135,7 @@ class TestMailTracking(TransactionCase):
 
     def _check_partner_trackings_cc(self, message):
         message_dict = message.message_format()[0]
-        self.assertEqual(len(message_dict["partner_trackings"]), 3)
+        self.assertEqual(len(message_dict["partner_trackings"]), 5)
         # mail cc
         foundPartner = False
         foundNoPartner = False
@@ -220,7 +193,7 @@ class TestMailTracking(TransactionCase):
 
     def _check_partner_trackings_to(self, message):
         message_dict = message.message_format()[0]
-        self.assertEqual(len(message_dict["partner_trackings"]), 4)
+        self.assertEqual(len(message_dict["partner_trackings"]), 6)
         # mail cc
         foundPartner = False
         foundNoPartner = False
@@ -273,14 +246,23 @@ class TestMailTracking(TransactionCase):
         self.assertEqual(len(recipients[self.recipient.id]), 4)
         self._check_partner_trackings_to(message)
         # Catchall + Alias
-        IrConfigParamObj = self.env["ir.config_parameter"].sudo()
-        IrConfigParamObj.set_param("mail.catchall.alias", "TheCatchall")
-        IrConfigParamObj.set_param("mail.catchall.domain", "test.com")
+        # TODO check how to create domain and alias in v17.
+        domain = self.env["mail.alias.domain"].create(
+            {"name": "test.com", "catchall_alias": "catchall"}
+        )
         self.env["mail.alias"].create(
-            {
-                "alias_model_id": self.env["ir.model"]._get("res.partner").id,
-                "alias_name": "support+unnamed",
-            }
+            [
+                {
+                    "alias_model_id": self.env["ir.model"]._get("res.partner").id,
+                    "alias_name": "support+unnamed",
+                    "alias_domain_id": domain.id,
+                },
+                {
+                    "alias_model_id": self.env["ir.model"]._get("res.partner").id,
+                    "alias_name": "thecatchall",
+                    "alias_domain_id": domain.id,
+                },
+            ]
         )
         recipients = self.recipient._message_get_suggested_recipients()
         self.assertEqual(len(recipients[self.recipient.id]), 2)
@@ -345,7 +327,7 @@ class TestMailTracking(TransactionCase):
             .with_context(mail_message_to_resend=message.id)
             .create({})
         )
-        # Check failed recipient)s
+        # Check failed recipients
         self.assertTrue(any(wizard.partner_ids))
         self.assertEqual(self.recipient.email, wizard.partner_ids[0].email)
         # Resend message
@@ -364,92 +346,10 @@ class TestMailTracking(TransactionCase):
         )
         mail.send()
         # Search tracking created
-        tracking_email = self.env["mail.tracking.email"].search(
-            [("mail_id", "=", mail.id)]
+        tracking_email = (
+            self.env["mail.tracking.email"].sudo().search([("mail_id", "=", mail.id)])
         )
         return mail, tracking_email
-
-    @mute_logger("odoo.addons.mail_tracking.controllers.main")
-    def test_mail_send(self):
-        controller = MailTrackingController()
-        db = self.env.cr.dbname
-        image = base64.b64decode(BLANK)
-        mail, tracking = self.mail_send(self.recipient.email)
-        self.assertEqual(mail.email_to, tracking.recipient)
-        self.assertEqual(mail.email_from, tracking.sender)
-        with patch("odoo.http.db_filter") as mock_client:
-            mock_client.return_value = True
-            res = controller.mail_tracking_open(db, tracking.id, tracking.token)
-            self.assertEqual(image, res.response[0])
-            # Two events: sent and open
-            self.assertEqual(2, len(tracking.tracking_event_ids))
-            # Fake event: tracking_email_id = False
-            res = controller.mail_tracking_open(db, False, False)
-            self.assertEqual(image, res.response[0])
-            # Two events again because no tracking_email_id found for False
-            self.assertEqual(2, len(tracking.tracking_event_ids))
-
-    @mute_logger("odoo.addons.mail_tracking.controllers.main")
-    def test_mail_tracking_open(self):
-        def mock_error_function(*args, **kwargs):
-            raise Exception()
-
-        controller = MailTrackingController()
-        db = self.env.cr.dbname
-        with patch("odoo.http.db_filter") as mock_client:
-            mock_client.return_value = True
-            mail, tracking = self.mail_send(self.recipient.email)
-            # Tracking is in sent or delivered state. But no token give.
-            # Don't generates tracking event
-            controller.mail_tracking_open(db, tracking.id)
-            self.assertEqual(1, len(tracking.tracking_event_ids))
-            tracking.write({"state": "opened"})
-            # Tracking isn't in sent or delivered state.
-            # Don't generates tracking event
-            controller.mail_tracking_open(db, tracking.id, tracking.token)
-            self.assertEqual(1, len(tracking.tracking_event_ids))
-            tracking.write({"state": "sent"})
-            # Tracking is in sent or delivered state and a token is given.
-            # Generates tracking event
-            controller.mail_tracking_open(db, tracking.id, tracking.token)
-            self.assertEqual(2, len(tracking.tracking_event_ids))
-            # Generate new email due concurrent event filter
-            mail, tracking = self.mail_send(self.recipient.email)
-            tracking.write({"token": False})
-            # Tracking is in sent or delivered state but a token is given for a
-            # record that doesn't have a token.
-            # Don't generates tracking event
-            controller.mail_tracking_open(db, tracking.id, "tokentest")
-            self.assertEqual(1, len(tracking.tracking_event_ids))
-            # Tracking is in sent or delivered state and not token is given for
-            # a record that doesn't have a token.
-            # Generates tracking event
-            controller.mail_tracking_open(db, tracking.id, False)
-            self.assertEqual(2, len(tracking.tracking_event_ids))
-            # Purposely trigger an error during mail_tracking_open
-            # flow (to increase coverage)
-            with patch(
-                "odoo.addons.mail_tracking.models.mail_tracking_email.MailTrackingEmail.search",
-                wraps=mock_error_function,
-            ):
-                controller.mail_tracking_open(db, tracking.id, False)
-        # Purposely trigger an error during db_env (to increase coverage)
-        with patch("odoo.http.db_filter") as mock_client, self.assertRaises(BadRequest):
-            mock_client.return_value = False
-            controller.mail_tracking_open(db, tracking.id, False)
-
-    def test_db_env_no_cr(self):
-        http.request.env = None
-        db = self.env.cr.dbname
-        controller = MailTrackingController()
-        # Cast Cursor to Mock object to avoid raising 'Cursor not closed explicitly' log
-        with patch("odoo.sql_db.db_connect"), patch(
-            "odoo.http.db_filter"
-        ) as mock_client:
-            mock_client.return_value = True
-            mail, tracking = self.mail_send(self.recipient.email)
-            response = controller.mail_tracking_open(db, tracking.id, False)
-            self.assertEqual(response.status_code, 200)
 
     def test_concurrent_open(self):
         mail, tracking = self.mail_send(self.recipient.email)
@@ -615,7 +515,7 @@ class TestMailTracking(TransactionCase):
         message_dict = {
             "bounced_email": "test@test.net",
             "bounced_message": message,
-            "bounced_msg_id": [message.message_id],
+            "bounced_msg_ids": [message.message_id],
             "bounced_partner": self.recipient,
             "cc": "",
             "date": "2023-02-07 12:35:53",
@@ -670,37 +570,92 @@ class TestMailTracking(TransactionCase):
                 "data-odoo-tracking-email not found", tracking.error_description
             )
 
-    def test_mail_init_messaging(self):
-        def mock_json_response(*args, **kwargs):
-            return {"expected_result": True}
-
-        controller = MailTrackingDiscussController()
-        # This is non-functional test to increase coverage
-        with patch(
-            "odoo.addons.mail.controllers.discuss.DiscussController.mail_init_messaging",
-            wraps=mock_json_response,
-        ):
-            res = controller.mail_init_messaging()
-            self.assertTrue(res["expected_result"])
-
-    def test_discuss_failed_messages(self):
-        def mock_json_response(*args, **kwargs):
-            return {"expected_result": True}
-
-        def mock_message_fetch(*args, **kwargs):
-            return self.env["mail.message"]
-
-        controller = MailTrackingDiscussController()
-        # This is non-functional test to increase coverage
-        with patch(
-            "odoo.addons.mail_tracking.models.mail_message.MailMessage.message_format",
-            wraps=mock_json_response,
-        ), patch(
-            "odoo.addons.mail.models.mail_message.Message._message_fetch",
-            wraps=mock_message_fetch,
-        ):
-            res = controller.discuss_failed_messages()
-            self.assertTrue(res["expected_result"])
-
     def test_unlink_mail_alias(self):
         self.env["ir.config_parameter"].search([], limit=1).unlink()
+
+
+@odoo.tests.tagged("-at_install", "post_install")
+class TestMailTrackingHttp(HttpCaseWithUserDemo, TestMailTracking):
+    def mail_send(self, recipient):
+        mail = self.env["mail.mail"].create(
+            {
+                "subject": "Test subject",
+                "email_from": "from@domain.com",
+                "email_to": recipient,
+                "body_html": "<p>This is a test message</p>",
+            }
+        )
+        mail.send()
+        # Search tracking created
+        tracking_email = (
+            self.env["mail.tracking.email"].sudo().search([("mail_id", "=", mail.id)])
+        )
+        return mail, tracking_email
+
+    def test_mail_send(self):
+        self.authenticate(None, None)
+        db = self.env.cr.dbname
+        mail, tracking = self.mail_send(self.recipient.email)
+        self.assertEqual(mail.email_to, tracking.recipient)
+        self.assertEqual(mail.email_from, tracking.sender)
+        res = self.url_open(
+            url="/mail/tracking/open/%s/%s/%s/blank.gif"  # noqa UP031
+            % (db, tracking.id, tracking.token),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(res.status_code, 200)
+        # Two events: sent and open
+        self.assertEqual(2, len(tracking.tracking_event_ids))
+        # Fake event: tracking_email_id = False
+        self.url_open(
+            url="/mail/tracking/open/%s/%s/%s/blank.gif" % (db, False, False),  # noqa UP031
+            headers={"Content-Type": "application/json"},
+        )
+        # Two events again because no tracking_email_id found for False
+        self.assertEqual(2, len(tracking.tracking_event_ids))
+
+    def test_mail_tracking_open(self):
+        self.authenticate(None, None)
+        db = self.env.cr.dbname
+        _, tracking = self.mail_send(self.recipient.email)
+        # Tracking is in sent or delivered state. But no token give.
+        # Do not generates tracking event
+        self.url_open(
+            url="/mail/tracking/open/%s/%s/%s/blank.gif" % (db, tracking.id, False),  # noqa UP031
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(1, len(tracking.tracking_event_ids))
+        tracking.write({"state": "opened"})
+        # Tracking isn't in sent or delivered state.
+        # Don't generates tracking event
+        self.url_open(
+            url=f"/mail/tracking/open/{db}/{tracking.id}/{tracking.token}/blank.gif",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(1, len(tracking.tracking_event_ids))
+        tracking.write({"state": "sent"})
+        # Tracking is in sent or delivered state and a token is given.
+        # Generates tracking event
+        self.url_open(
+            url=f"/mail/tracking/open/{db}/{tracking.id}/{tracking.token}/blank.gif",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(2, len(tracking.tracking_event_ids))
+        # Generate new email due concurrent event filter
+        _, tracking = self.mail_send(self.recipient.email)
+        tracking.write({"token": False})
+        # Tracking is in sent or delivered state but a token is given for a
+        # record that doesn't have a token.
+        # Don't generates tracking event
+        self.url_open(
+            url=f"/mail/tracking/open/{db}/{tracking.id}/tokentest/blank.gif",  # noqa E501
+            headers={"Content-Type": "application/json"},
+        )
+        # Tracking is in sent or delivered state and not token is given for
+        # a record that doesn't have a token.
+        # Generates tracking event
+        self.url_open(
+            url="/mail/tracking/open/%s/%s/blank.gif" % (db, tracking.id),  # noqa UP031
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(2, len(tracking.tracking_event_ids))

@@ -7,7 +7,7 @@
 {
     "name": "Email tracking",
     "summary": "Email tracking system for all mails sent",
-    "version": "16.0.1.0.4",
+    "version": "17.0.1.0.0",
     "category": "Social Network",
     "website": "https://github.com/OCA/social",
     "author": ("Tecnativa, " "Odoo Community Association (OCA)"),
@@ -26,32 +26,8 @@
     ],
     "assets": {
         "web.assets_backend": [
-            "mail_tracking/static/src/client_actions/failed_message_storage.esm.js",
-            "mail_tracking/static/src/models/chatter.esm.js",
-            "mail_tracking/static/src/models/discuss_sidebar_mailbox_view.esm.js",
-            "mail_tracking/static/src/models/discuss_view.esm.js",
-            "mail_tracking/static/src/models/mailbox.esm.js",
-            "mail_tracking/static/src/models/message_list_view_item.esm.js",
-            "mail_tracking/static/src/models/message_list_view.esm.js",
-            "mail_tracking/static/src/models/message_view.esm.js",
-            "mail_tracking/static/src/models/message.esm.js",
-            "mail_tracking/static/src/models/messaging_initializer.esm.js",
-            "mail_tracking/static/src/models/messaging.esm.js",
-            "mail_tracking/static/src/models/thread.esm.js",
-            "mail_tracking/static/src/components/discuss/discuss.xml",
-            "mail_tracking/static/src/components/message/message.xml",
-            "mail_tracking/static/src/components/message/message.esm.js",
-            "mail_tracking/static/src/components/message/message.scss",
-            "mail_tracking/static/src/components/message_list/message_list.esm.js",
-            "mail_tracking/static/src/components/failed_message/failed_message.xml",
-            "mail_tracking/static/src/components/failed_message/failed_message.esm.js",
-            "mail_tracking/static/src/components/failed_message/failed_message.scss",
-            "mail_tracking/static/src/components/failed_message_list/failed_message_list.xml",
-            "mail_tracking/static/src/components/failed_message_list/failed_message_list.esm.js",  # noqa: B950
-            "mail_tracking/static/src/components/discuss_sidebar_mailbox/discuss_sidebar_mailbox.xml",  # noqa: B950
-            "mail_tracking/static/src/components/discuss_sidebar_mailbox/discuss_sidebar_mailbox.esm.js",  # noqa: B950
-            "mail_tracking/static/src/components/thread_view/thread_view.xml",
-            "mail_tracking/static/src/components/thread_view/thread_view.scss",
+            "mail_tracking/static/src/components/**/*",
+            "mail_tracking/static/src/core/**/*",
         ],
     },
     "demo": ["demo/demo.xml"],

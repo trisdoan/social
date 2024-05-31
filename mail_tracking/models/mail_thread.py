@@ -127,3 +127,8 @@ class MailThread(models.AbstractModel):
             nodes[0].append(new_filter)
         res["arch"] = etree.tostring(doc, encoding="unicode")
         return res
+
+    def _get_message_create_valid_field_names(self):
+        res = super()._get_message_create_valid_field_names()
+        res.update({"email_cc", "email_to"})
+        return res
