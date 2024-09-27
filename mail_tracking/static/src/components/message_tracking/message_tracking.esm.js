@@ -9,7 +9,7 @@ export class MessageTracking extends Component {
         this.partner_trackings = useState(this.props.partner_trackings);
     }
     _onTrackingStatusClick(event) {
-        var tracking_email_id = $(event.currentTarget).data("tracking");
+        const tracking_email_id = event.currentTarget.dataset.tracking;
         event.preventDefault();
         return this.env.services.action.doAction({
             type: "ir.actions.act_window",
@@ -18,7 +18,7 @@ export class MessageTracking extends Component {
             res_model: "mail.tracking.email",
             views: [[false, "form"]],
             target: "new",
-            res_id: tracking_email_id,
+            res_id: parseInt(tracking_email_id),
         });
     }
 }

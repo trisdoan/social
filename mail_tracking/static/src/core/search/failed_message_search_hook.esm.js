@@ -4,14 +4,14 @@ import {useSequential} from "@mail/utils/common/hooks";
 import {useService} from "@web/core/utils/hooks";
 
 export function useFailedMessageSearch(thread) {
-    const threadService = useService("mail.thread");
+    const store = useService("mail.store");
     const sequential = useSequential();
     const state = useState({
         thread,
         async filter_failed() {
             this.searching = true;
             const {count, loadMore, messages} = await sequential(() =>
-                threadService.filter_failed(this.thread)
+                store.filter_failed(this.thread)
             );
             this.searched = true;
             this.searching = false;

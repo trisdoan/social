@@ -8,7 +8,6 @@ export class FailedMessageReview extends Component {
     static template = "mail_tracking.FailedMessageReview";
 
     setup() {
-        this.threadService = useState(useService("mail.thread"));
         this.message = useState(this.props.message);
         this.orm = useService("orm");
     }
@@ -17,11 +16,7 @@ export class FailedMessageReview extends Component {
             [this.message.id],
         ]);
         // Debugger
-        const thread = this.env.services["mail.thread"].getThread(
-            this.message.model,
-            this.message.id
-        );
-        this.env.services["mail.thread"].fetchNewMessages(thread);
+        this.thread.fetchNewMessages();
         if (this.props.reloadParentView) {
             this.props.reloadParentView();
         }
@@ -40,10 +35,7 @@ export class FailedMessageReview extends Component {
         });
     }
     get thread() {
-        return this.threadService.getThread(
-            this.message.res_model,
-            this.message.res_id
-        );
+        return this.props.message.thread;
     }
     get failed_recipients() {
         const error_states = ["error", "rejected", "spam", "bounced", "soft-bounced"];
