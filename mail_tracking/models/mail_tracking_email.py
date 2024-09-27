@@ -176,16 +176,13 @@ class MailTrackingEmail(models.Model):
     @api.model
     def _search(
         self,
-        args,
+        domain,
         offset=0,
         limit=None,
         order=None,
-        access_rights_uid=None,
     ):
         """Filter ids based on related records ACLs"""
-        allowed = super()._search(
-            args, offset, limit, order, access_rights_uid=access_rights_uid
-        )
+        allowed = super()._search(domain, offset, limit, order)
         if not self.env.user.has_group("base.group_system"):
             ids = self.browse(allowed)._find_allowed_tracking_ids()
             allowed = self.browse(ids)._as_query(order)
@@ -353,9 +350,9 @@ class MailTrackingEmail(models.Model):
         else:
             values.update(
                 {
-                    "error_smtp_server": tools.ustr(smtp_server),
+                    "error_smtp_server": tools.exception_to_unicode(smtp_server),
                     "error_type": exception.__class__.__name__,
-                    "error_description": tools.ustr(exception),
+                    "error_description": tools.exception_to_unicode(exception),
                 }
             )
             self.sudo()._partners_email_bounced_set("error")
@@ -369,7 +366,7 @@ class MailTrackingEmail(models.Model):
             content = re.sub(
                 r'<img[^>]*data-odoo-tracking-email=["\'][0-9]*["\'][^>]*>', "", content
             )
-            body = tools.append_content_to_html(
+            body = tools.mail.append_content_to_html(
                 content, tracking_url, plaintext=False, container_tag="div"
             )
             email["body"] = body
