@@ -8,6 +8,8 @@ from odoo import _, api, fields, models
 from odoo.osv import expression
 from odoo.tools import email_split
 
+from odoo.addons.mail.tools.discuss import Store
+
 
 class MailMessage(models.Model):
     _inherit = "mail.message"
@@ -292,18 +294,14 @@ class MailMessage(models.Model):
         ]
         return res
 
-        unreviewed_messages = self.search([("is_failed_message", "=", True)])
-        unreviewed_messages.write({"mail_tracking_needs_action": False})
-        ids = unreviewed_messages.ids
-
-    def _message_format_extras(self, format_reply):
-        """Add info for the web client"""
-        res = super()._message_format_extras(format_reply)
-        res.update(
-            {
-                "partner_trackings": self.tracking_status(),
-                "mail_tracking_needs_action": self.mail_tracking_needs_action,
-                "is_failed_message": self.is_failed_message,
-            }
-        )
-        return res
+    def _extras_to_store(self, store: Store, format_reply):
+        super()._extras_to_store(store, format_reply=format_reply)
+        for message in self:
+            store.add(
+                message,
+                {
+                    "partner_trackings": message.tracking_status(),
+                    "mail_tracking_needs_action": message.mail_tracking_needs_action,
+                    "is_failed_message": message.is_failed_message,
+                },
+            )
