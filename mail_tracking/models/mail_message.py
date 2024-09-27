@@ -8,6 +8,8 @@ from odoo import _, api, fields, models
 from odoo.osv import expression
 from odoo.tools import email_split
 
+from odoo.addons.mail.tools.discuss import Store
+
 
 class MailMessage(models.Model):
     _inherit = "mail.message"
@@ -267,7 +269,7 @@ class MailMessage(models.Model):
 
     def set_need_action_done(self):
         """This will mark the messages to be ignored in the tracking issues filter"""
-        self.check_access_rule("read")
+        self.check_access("read")
         self.mail_tracking_needs_action = False
         self._notify_message_notification_update()
 
@@ -286,29 +288,15 @@ class MailMessage(models.Model):
         ]
         return res
 
-    def _message_notification_format(self):
-        """Add info for the web client"""
-        formatted_notifications = super()._message_notification_format()
-        for notification in formatted_notifications:
-            message = self.filtered(
-                lambda x, notification=notification: x.id == notification["id"]
-            )
-            notification.update(
+    def _extras_to_store(self, store: Store, format_reply):
+        res = super()._extras_to_store(store, format_reply=format_reply)
+        for message in self:
+            store.add(
+                message,
                 {
+                    "partner_trackings": message.tracking_status(),
                     "mail_tracking_needs_action": message.mail_tracking_needs_action,
                     "is_failed_message": message.is_failed_message,
-                }
+                },
             )
-        return formatted_notifications
-
-    def _message_format_extras(self, format_reply):
-        """Add info for the web client"""
-        res = super()._message_format_extras(format_reply)
-        res.update(
-            {
-                "partner_trackings": self.tracking_status(),
-                "mail_tracking_needs_action": self.mail_tracking_needs_action,
-                "is_failed_message": self.is_failed_message,
-            }
-        )
         return res
