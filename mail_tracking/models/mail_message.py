@@ -28,7 +28,8 @@ class MailMessage(models.Model):
         default=False,
     )
     is_failed_message = fields.Boolean(
-        compute="_compute_is_failed_message", search="_search_is_failed_message",
+        compute="_compute_is_failed_message",
+        search="_search_is_failed_message",
     )
 
     @api.model
@@ -278,7 +279,7 @@ class MailMessage(models.Model):
 
     @api.model
     def get_failed_count(self):
-        """ Gets the number of failed messages used on discuss mailbox item"""
+        """Gets the number of failed messages used on discuss mailbox item"""
         return self.search_count([("is_failed_message", "=", True)])
 
     @api.model
