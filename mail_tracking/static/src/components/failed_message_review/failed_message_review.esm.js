@@ -1,4 +1,3 @@
-/** @odoo-module **/
 import {useService} from "@web/core/utils/hooks";
 
 const {Component, useState} = owl;

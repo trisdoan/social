@@ -1,4 +1,3 @@
-/* @odoo-module */
 import {onWillUnmount, useState} from "@odoo/owl";
 import {useSequential} from "@mail/utils/common/hooks";
 import {useService} from "@web/core/utils/hooks";

@@ -1,4 +1,3 @@
-/** @odoo-module **/
 import {AvatarCardPopover} from "@mail/discuss/web/avatar_card/avatar_card_popover";
 import {FailedMessageReview} from "@mail_tracking/components/failed_message_review/failed_message_review.esm";
 import {MessageTracking} from "@mail_tracking/components/message_tracking/message_tracking.esm";

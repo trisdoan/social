@@ -1,4 +1,3 @@
-/** @odoo-module */
 import {Store} from "@mail/core/common/store_service";
 import {Record} from "@mail/core/common/record";
 import {rpc} from "@web/core/network/rpc";
