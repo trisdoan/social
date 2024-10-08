@@ -6,11 +6,15 @@ from unittest.mock import patch
 
 from werkzeug.exceptions import BadRequest
 
-from odoo import http
+from odoo import SUPERUSER_ID, http
+from odoo.exceptions import AccessError
 from odoo.fields import Command
+from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 from odoo.tools import mute_logger
 
+from odoo.addons.base.tests.common import HttpCaseWithUserDemo
+from odoo.addons.mail.tests.common import mail_new_test_user
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.mail_tracking.controllers.main import BLANK, MailTrackingController
 
@@ -481,9 +485,10 @@ class TestMailTracking(TransactionCase):
         db = self.env.cr.dbname
         controller = MailTrackingController()
         # Cast Cursor to Mock object to avoid raising 'Cursor not closed explicitly' log
-        with patch("odoo.sql_db.db_connect"), patch(
-            "odoo.http.db_filter"
-        ) as mock_client:
+        with (
+            patch("odoo.sql_db.db_connect"),
+            patch("odoo.http.db_filter") as mock_client,
+        ):
             mock_client.return_value = True
             mail, tracking = self.mail_send(self.recipient.email)
             response = controller.mail_tracking_open(db, tracking.id, False)
@@ -706,4 +711,94 @@ class TestMailTracking(TransactionCase):
             mail, tracking = self.mail_send(self.recipient.email)
             self.assertEqual(
                 "data-odoo-tracking-email not found", tracking.error_description
+            )
+
+
+@tagged("-at_install", "post_install")
+class TestAccessTrackingEmail(HttpCaseWithUserDemo, TestMailTracking):
+    def _get_tracking_email(
+        self, user=SUPERUSER_ID, mail_msg_id=False, mail_id=False, partner_id=False
+    ):
+        domain = []
+        if mail_msg_id:
+            domain.append(("mail_message_id", "=", mail_msg_id))
+        if mail_id:
+            domain.append(("mail_id", "=", mail_id))
+        if partner_id:
+            domain.append(("partner_id", "=", partner_id))
+        result = self.env["mail.tracking.email"].with_user(user).search(domain)
+        return result
+
+    def test_access_tracking_email(self):
+        if "hr.employee" in self.env:
+            self.admin_user = self.env.ref("base.user_admin")
+            user_employee_1 = mail_new_test_user(
+                self.env,
+                groups="base.group_user",
+                login="employee1",
+                name="employee 1",
+            )
+            employee_1 = self.env["hr.employee"].create(
+                [
+                    {
+                        "name": "employee 1",
+                        "user_id": user_employee_1.id,
+                    },
+                ]
+            )
+            user_employee_2 = mail_new_test_user(
+                self.env,
+                groups="base.group_user",
+                login="employee2",
+                name="employee 2",
+            )
+
+            # Create message
+            message = self.env["mail.message"].create(
+                {
+                    "subject": "Confidential Message",
+                    "body": "Confidential message",
+                    "author_id": self.sender.id,
+                    "email_from": self.sender.email,
+                    "model": "hr.employee",
+                    "res_id": employee_1.id,
+                    "partner_ids": [(6, 0, [user_employee_1.partner_id.id])],
+                }
+            )
+            if message.is_thread_message():
+                self.env[message.model].browse(message.res_id)._notify_thread(message)
+            # Search tracking created
+            tracking_email = self._get_tracking_email(
+                mail_msg_id=message.id, partner_id=user_employee_1.partner_id.id
+            )
+            # ensure tracking exists
+            self.assertTrue(tracking_email)
+            # Addmin should be able to read/search the tracking email
+            tracking_email.with_user(self.admin_user).read()
+            self.assertTrue(
+                self._get_tracking_email(
+                    mail_msg_id=message.id,
+                    partner_id=user_employee_1.partner_id.id,
+                )
+            )
+
+            # employee 1 should be able to read/search the tracking email
+            tracking_email.with_user(user_employee_1).read()
+            self.assertTrue(
+                self._get_tracking_email(
+                    user=user_employee_1,
+                    mail_msg_id=message.id,
+                    partner_id=user_employee_1.partner_id.id,
+                )
+            )
+
+            # employee 2 should not be able to read/search the tracking email
+            with self.assertRaises(AccessError):
+                tracking_email.with_user(user_employee_2).read()
+            self.assertFalse(
+                self._get_tracking_email(
+                    user=user_employee_2,
+                    mail_msg_id=message.id,
+                    partner_id=user_employee_1.partner_id.id,
+                )
             )

@@ -269,7 +269,7 @@ class MailMessage(models.Model):
 
     def set_need_action_done(self):
         """This will mark the messages to be ignored in the tracking issues filter"""
-        self.check_access_rule("read")
+        self.check_access("read")
         self.mail_tracking_needs_action = False
         self._notify_message_notification_update()
 
