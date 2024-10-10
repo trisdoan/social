@@ -5,7 +5,6 @@
 from email.utils import getaddresses
 
 from odoo import _, api, fields, models
-from odoo.osv import expression
 from odoo.tools import email_split
 
 from odoo.addons.mail.tools.discuss import Store
@@ -31,7 +30,7 @@ class MailMessage(models.Model):
     )
     is_failed_message = fields.Boolean(
         compute="_compute_is_failed_message",
-        search="_search_is_failed_message",
+        store=True,
     )
 
     @api.model
@@ -60,31 +59,6 @@ class MailMessage(models.Model):
             message.is_failed_message = bool(
                 needs_action and involves_me and has_failed_trackings
             )
-
-    def _search_is_failed_message(self, operator, value):
-        """Search for messages considered failed for the active user.
-        Be notice that 'notificacion_ids' is a record that change if
-        the user mark the message as readed.
-        """
-        # FIXME: Due to ORM issue with auto_join and 'OR' we construct the domain
-        # using an extra query to get valid results.
-        # For more information see: https://github.com/odoo/odoo/issues/25175
-        notification_partner_ids = self.search(
-            [("notification_ids.res_partner_id", "=", self.env.user.partner_id.id)]
-        )
-        return expression.normalize_domain(
-            [
-                (
-                    "mail_tracking_ids.state",
-                    "in" if value else "not in",
-                    list(self.get_failed_states()),
-                ),
-                ("mail_tracking_needs_action", "=", True),
-                "|",
-                ("author_id", "=", self.env.user.partner_id.id),
-                ("id", "in", notification_partner_ids.ids),
-            ]
-        )
 
     def _tracking_status_map_get(self):
         """Map tracking states to be used in chatter"""
