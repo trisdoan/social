@@ -1,0 +1,2 @@
+# FIXME: replace with actual ref
+odoo-addon-mail_tracking @ git+https://github.com/OCA/social.git@refs/pull/1215/head#subdirectory=mail_tracking
