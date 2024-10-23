@@ -714,6 +714,68 @@ class TestMailTracking(TransactionCase):
                 "data-odoo-tracking-email not found", tracking.error_description
             )
 
+    def test_search_is_failed_message(self):
+        user_employee_1 = mail_new_test_user(
+            self.env,
+            groups="base.group_user",
+            login="employee1",
+            name="employee_1",
+        )
+        partner_employee = user_employee_1.partner_id
+        user_employee_2 = mail_new_test_user(
+            self.env,
+            groups="base.group_user",
+            login="employee2",
+            name="employee_2",
+        )
+        message = self.env["mail.message"].create(
+            {
+                "subject": "Message test",
+                "author_id": self.sender.id,
+                "email_from": self.sender.email,
+                "message_type": "comment",
+                "model": "res.partner",
+                "res_id": partner_employee.id,
+                "partner_ids": [Command.link(partner_employee.id)],
+                "body": "<p>This is a test message</p>",
+            }
+        )
+        if message.is_thread_message():
+            self.env[message.model].browse(message.res_id)._notify_thread(message)
+        # Search tracking created
+        tracking_email = self.env["mail.tracking.email"].search(
+            [
+                ("mail_message_id", "=", message.id),
+                ("partner_id", "=", partner_employee.id),
+            ]
+        )
+        # Force error state
+        tracking_email.state = "error"
+
+        # employee_1 should read/search failed msg
+        failed_msg = message.with_user(user_employee_1).read(
+            fields=["is_failed_message"]
+        )
+        self.assertTrue(failed_msg[0]["is_failed_message"])
+        self.assertTrue(
+            self.env["mail.message"]
+            .with_user(user_employee_1)
+            .search(
+                [
+                    ("is_failed_message", "=", True),
+                ]
+            )
+        )
+        self.assertFalse(
+            self.env["mail.message"]
+            .with_user(user_employee_2)
+            .search(
+                [
+                    ("is_failed_message", "=", True),
+                ]
+            )
+        )
+
 
 @tagged("-at_install", "post_install")
 class TestAccessTrackingEmail(HttpCaseWithUserDemo, TestMailTracking):

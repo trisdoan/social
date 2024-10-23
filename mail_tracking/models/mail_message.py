@@ -61,30 +61,44 @@ class MailMessage(models.Model):
                 needs_action and involves_me and has_failed_trackings
             )
 
-    def _search_is_failed_message(self, operator, value):
+    @api.model
+    def _search_is_failed_message(self, operator, operand):
         """Search for messages considered failed for the active user.
         Be notice that 'notificacion_ids' is a record that change if
         the user mark the message as readed.
         """
-        # FIXME: Due to ORM issue with auto_join and 'OR' we construct the domain
-        # using an extra query to get valid results.
-        # For more information see: https://github.com/odoo/odoo/issues/25175
-        notification_partner_ids = self.search(
-            [("notification_ids.res_partner_id", "=", self.env.user.partner_id.id)]
+        pid = self.env.user.partner_id.id
+        self.flush_model(
+            ["author_id", "mail_tracking_ids", "mail_tracking_needs_action"]
         )
-        return expression.normalize_domain(
+        self.env["mail.notification"].flush_model(["mail_message_id", "res_partner_id"])
+        # retrieve failed tracking email
+        tracking_operator = "in" if operand else "not in"
+        failed_states = list(self.get_failed_states())
+        tracking_ids = self.env["mail.tracking.email"]._search(
+            [("state", f"{tracking_operator}", failed_states)]
+        )
+
+        is_involve = expression.OR(
             [
-                (
-                    "mail_tracking_ids.state",
-                    "in" if value else "not in",
-                    list(self.get_failed_states()),
-                ),
-                ("mail_tracking_needs_action", "=", True),
-                "|",
-                ("author_id", "=", self.env.user.partner_id.id),
-                ("id", "in", notification_partner_ids.ids),
+                [
+                    ("notification_ids.res_partner_id", "=", pid),
+                ],
+                [
+                    ("author_id", "=", pid),
+                ],
             ]
         )
+        domain = expression.AND(
+            [
+                [
+                    ("mail_tracking_ids", "in", tracking_ids),
+                    ("mail_tracking_needs_action", "=", True),
+                ],
+                is_involve,
+            ]
+        )
+        return domain
 
     def _tracking_status_map_get(self):
         """Map tracking states to be used in chatter"""
