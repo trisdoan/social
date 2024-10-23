@@ -5,9 +5,11 @@ import hashlib
 import inspect
 
 from odoo import tools
-from odoo.tests import Form
+from odoo.tests import Form, tagged
+from odoo.tests.common import TransactionCase
 
 from odoo.addons.mail.models.mail_mail import MailMail as upstream
+from odoo.addons.mail.tests.common import MailCase
 from odoo.addons.mail.tests.test_mail_composer import TestMailComposer
 
 VALID_HASHES = ["d52cb36b88b33abc9556f7be6718d93f", "461467cd5b356072fc054468c75f6e26"]
@@ -85,12 +87,12 @@ class TestMailCcBcc(TestMailComposer):
         # Company default values
         env.company.default_partner_cc_ids = self.partner_cc3
         env.company.default_partner_bcc_ids = self.partner_cc2
-        # Product template values
-        tmpl_model = env["ir.model"].search([("model", "=", "product.template")])
+        # Partner template values
+        tmpl_model = env["ir.model"].search([("model", "=", "res.partner")])
         partner_cc = self.partner_cc
         partner_bcc = self.partner_bcc
         vals = {
-            "name": "Product Template: Re: [E-COM11] Cabinet with Doors",
+            "name": "Test Template",
             "model_id": tmpl_model.id,
             "subject": "Re: [E-COM11] Cabinet with Doors",
             "body_html": """<p style="margin:0px 0 12px 0;box-sizing:border-box;">
@@ -102,18 +104,18 @@ Test Template<br></p>""",
                 (partner_bcc.name or "False", partner_bcc.email or "False")
             ),
         }
-        prod_tmpl = env["mail.template"].create(vals)
+        partner_tmpl = env["mail.template"].create(vals)
         # Open mail composer form and check for default values from company
         form = self.open_mail_composer_form()
         composer = form.save()
         self.assertEqual(composer.partner_cc_ids, self.partner_cc3)
         self.assertEqual(composer.partner_bcc_ids, self.partner_cc2)
         # Change email template and check for values from it
-        form.template_id = prod_tmpl
+        form.template_id = partner_tmpl
         composer = form.save()
         # Beside existing Cc and Bcc, add template's ones
         form = Form(composer)
-        form.template_id = prod_tmpl
+        form.template_id = partner_tmpl
         composer = form.save()
         expecting = self.partner_cc3 + self.partner_cc
         self.assertEqual(composer.partner_cc_ids, expecting)
@@ -127,8 +129,8 @@ Test Template<br></p>""",
         form = Form(composer)
         form.template_id = env["mail.template"]
         form.save()
-        self.assertFalse(form.template_id)
-        form.template_id = prod_tmpl
+        self.assertFalse(form.template_id)  # no template
+        form.template_id = partner_tmpl
         composer = form.save()
         expecting = self.partner_cc3 + self.partner_cc
         self.assertEqual(composer.partner_cc_ids, expecting)
@@ -175,3 +177,81 @@ Test Template<br></p>""",
             if subject == mail.get("subject"):
                 sent_mails += 1
         self.assertEqual(sent_mails, 1)
+
+
+@tagged("-at_install", "post_install")
+class TestMailComposerCcBccWithTracking(TransactionCase, MailCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.partner = cls.env.ref("base.res_partner_address_31")
+        cls.partner_cc = cls.env.ref("base.partner_demo")
+        cls.partner_bcc = cls.env.ref("base.res_partner_main2")
+        cls.admin_user = cls.env.ref("base.user_admin")
+
+        if "purchase.order" in cls.env:
+            cls.new_po = (
+                cls.env["purchase.order"]
+                .create(
+                    {
+                        "partner_id": cls.partner.id,
+                    }
+                )
+                .with_context(mail_notrack=False)
+            )
+
+    def test_tracking_mail_without_cc_bcc(self):
+        if self.new_po:
+            self.cr.precommit.clear()
+            # create a PO
+            # user subscribe to tracking status of PO
+            self.new_po.message_subscribe(
+                partner_ids=self.admin_user.partner_id.ids,
+                subtype_ids=(
+                    (
+                        self.env.ref("purchase.mt_rfq_sent")
+                        | self.env.ref("purchase.mt_rfq_confirmed")
+                    ).ids
+                ),
+            )
+
+            composer_ctx = self.new_po.action_rfq_send()
+            # send RFQ with cc/bcc
+            form = Form(
+                self.env["mail.compose.message"].with_context(**composer_ctx["context"])
+            )
+            composer = form.save()
+            composer.partner_ids = self.partner
+            composer.partner_cc_ids = self.partner_cc
+            composer.partner_bcc_ids = self.partner_bcc
+
+            with self.mock_mail_gateway(), self.mock_mail_app():
+                composer._action_send_mail()
+                self.flush_tracking()
+            self.assertEqual(
+                len(self._new_msgs),
+                2,
+                "Expected a tracking message and a RFQ message",
+            )
+            self.assertEqual(
+                self.ref("purchase.mt_rfq_sent"),
+                self._new_msgs[1].subtype_id.id,
+                "Expected a tracking message",
+            )
+
+            # RFQ email should include cc/bcc
+            rfq_message = self._new_msgs.filtered(lambda x: x.message_type == "comment")
+            self.assertEqual(len(rfq_message.notified_partner_ids), 3)
+            self.assertEqual(len(rfq_message.notification_ids), 3)
+            rfq_mail = rfq_message.mail_ids
+            self.assertEqual(len(rfq_mail.recipient_ids), 3)
+
+            # tracking email should not include cc/bcc
+            tracking_message = self._new_msgs.filtered(
+                lambda x: x.message_type == "notification"
+            )
+            tracking_field_mail = tracking_message.mail_ids
+            self.assertEqual(len(tracking_field_mail.recipient_ids), 1)
+            self.assertEqual(
+                tracking_field_mail.recipient_ids, self.admin_user.partner_id
+            )
