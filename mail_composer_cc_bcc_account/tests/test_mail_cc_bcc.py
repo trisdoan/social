@@ -1,56 +1,28 @@
 # Copyright 2023 Camptocamp
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
-from datetime import date
-
-from odoo.tests import Form
-
-from odoo.addons.mail_composer_cc_bcc.tests.test_mail_cc_bcc import TestMailCcBcc
 
 
-class TestMailCcBccInvoice(TestMailCcBcc):
-    def open_invoice_mail_composer_form(self):
-        # Use form to populate data
-        # init invoice data
-        self.test_invoice = test_record = self.test_account_move = self.env[
-            "account.move"
-        ].create(
-            {
-                "invoice_date": date(2024, 3, 2),
-                "invoice_date_due": date(2024, 3, 10),
-                "invoice_line_ids": [
-                    (0, 0, {"name": "Line1", "price_unit": 100.0}),
-                    (0, 0, {"name": "Line2", "price_unit": 200.0}),
-                ],
-                "move_type": "out_invoice",
-                "name": "invoice test",
-                "partner_id": self.env.ref("base.res_partner_2").id,
-            }
-        )
+from odoo.tests import tagged
 
-        self.assertTrue(
-            self.test_invoice,
-            "Test setup did not succeed. Invoice not found.",
-        )
-        self.test_invoice.write({"state": "posted"})
+from odoo.addons.account.tests.test_account_move_send import TestAccountMoveSendCommon
+from odoo.addons.mail.tests.common import MailCommon
 
-        ctx = {
-            "active_ids": test_record.ids,
-            "default_model": "account.move",
-            "default_res_id": test_record.id,
-            "mail_notify_force_send": True,
-        }
-        form = Form(self.env["account.move.send"].with_context(**ctx))
-        form.mail_body = "<p>Hello</p>"
-        return form
 
+@tagged("post_install_l10n", "post_install", "-at_install")
+class TestMailCcBccInvoice(TestAccountMoveSendCommon, MailCommon):
     def test_invoice_mail_cc_bcc(self):
-        self.set_company()
-        form = self.open_invoice_mail_composer_form()
-        form.mail_subject = "Hello"
-        composer = form.save()
+        invoice = self.init_invoice("out_invoice", amounts=[1000], post=True)
+        wizard = self.create_send_and_print(
+            invoice, sending_methods=["email", "manual"]
+        )
+        wizard.partner_cc_ids = self.partner_b
         with self.mock_mail_gateway():
-            composer.action_send_and_print()
-        message = self.test_invoice.message_ids[0]
+            wizard.action_send_and_print()
+
+        message = self._get_mail_message(invoice)
+        self.assertTrue(message)
+
+        # FIXME: return 2 email
         self.assertEqual(len(message.mail_ids), 1)
 
         # Only 2 partners (from default_cc/bcc of company) notified

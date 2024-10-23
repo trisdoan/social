@@ -7,13 +7,11 @@ from odoo import models
 class MailThread(models.AbstractModel):
     _inherit = "mail.thread"
 
-    def _message_create(self, values_list):
-        context = self.env.context
-        res = super()._message_create(values_list)
-        partners_cc = context.get("partner_cc_ids", None)
-        if partners_cc:
-            res.recipient_cc_ids = partners_cc
-        partners_bcc = context.get("partner_bcc_ids", None)
-        if partners_bcc:
-            res.recipient_bcc_ids = partners_bcc
-        return res
+    # FIXME: not working
+    def _get_message_create_valid_field_names(self):
+        """
+        add cc and bcc field to create record in mail.mail
+        """
+        field_names = super()._get_message_create_valid_field_names()
+        field_names.update({"partner_cc_ids", "partner_bcc_ids"})
+        return field_names
