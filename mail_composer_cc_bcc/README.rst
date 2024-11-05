@@ -118,7 +118,7 @@ Contributors
 Other credits
 -------------
 
-The creation and migration from 16.0 to 17.0 of this module were
+The creation and migration from 17.0 to 18.0 of this module were
 financially supported by Camptocamp.
 
 Maintainers
