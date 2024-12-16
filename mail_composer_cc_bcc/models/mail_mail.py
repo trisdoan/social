@@ -54,7 +54,7 @@ class MailMail(models.Model):
         success_pids = []
         failure_type = None
         # ===== Same with native Odoo =====
-        # https://github.com/odoo/odoo/blob/2baa481e14ca705f4c6d3d4d900daf24442a4aa5
+        # https://github.com/odoo/odoo/blob/55c165dc8777514afa4f1476b82ef6b50b8a7651
         # /addons/mail/models/mail_mail.py#L463
         try:
             if mail.state != "outgoing":
@@ -81,7 +81,7 @@ class MailMail(models.Model):
             email = mail._send_prepare_values()
             # ===== Same with native Odoo =====
             # headers
-            headers = {}
+            headers = {"X-Odoo-Message-Id": mail.message_id}
             bounce_alias = ICP.get_param("mail.bounce.alias")
             catchall_domain = ICP.get_param("mail.catchall.domain")
             if bounce_alias and catchall_domain:
